@@ -1,0 +1,15 @@
+[project]
+name = "game-automator"
+version = "0.1.0"
+description = "A lightweight Python automation utility for Anti-AFK and skill rotations."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pyautogui>=0.9.54",
+    "pyyaml>=6.0.3",
+]
+
+[dependency-groups]
+dev = [
+    "types-pyautogui>=0.9.3.20241230",
+]

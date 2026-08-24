@@ -1,306 +1,286 @@
-from pydirectinput import keyUp, keyDown, press, leftClick, write
-from random import randint, choice
-import dearpygui.dearpygui as dpg
-from threading import Thread
-from time import sleep
-import json
+import argparse
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+import queue
+import threading
+import time
+from typing import Any, Dict, List, Set
+import pyautogui
+import yaml
 
-GV = {
-    'antiafk': False,
-    'ppsmap': False,
-    'autoclicker': False
+
+@dataclass(frozen=True)
+class Skill:
+    key: str
+    cooldown: float
+    animation_delay: float = 0.2
+
+
+# Default Configuration
+CONFIG_PATH = Path("config.yaml")
+
+DEFAULT_AFK_INTERVAL = 60
+DEFAULT_AFK_SEQUENCE = [
+    {"action": "press", "key": "f", "delay": 0.1},
+    {"action": "click", "button": "left", "delay": 0.1},
+]
+
+DEFAULT_FARM_SKILLS = [
+    Skill("e", 12.0, 0.2),
+    Skill("r", 3.0, 0.2),
+    Skill("f", 15.0, 0.2),
+    Skill("x", 60.0, 0.2),
+]
+DEFAULT_FARM_CONFIG = {
+    "auto_click": True,
+    "auto_click_button": "left",
+    "auto_click_interval": 0.15,
+    "skills_delay": 0.1,
+    "skills": DEFAULT_FARM_SKILLS,
 }
 
-project_name = 'RTools'
-config_file = 'config.json'
 
-default_config = {
-    "antiafk-spin": False,
-    "antiafk-move": False,
-    "antiafk-emotes": False,
-    "antiafk-click": False,
-    "antiafk-jump": False,
-    "pp-letter": "E",
-    "pp-duration": 1.0,
-    "sleep-interval": 1.0,
-    "always-on-top": False,
-    "autoclicker-interval": 0.1,
-    "autoclicker-repeat": 10,
-    "autoclicker-toggle-bind": "insert",
-    "antiafk-toggle-bind": "home",
-    "pp-toggle-bind": "end"
-}
-
-def alert(message=str, button=bool):
-    dpg.delete_item("info-st-gui", children_only=True)
-    with dpg.window(label=f"{project_name} /// alert", width=183, height=30, tag="info-st-gui", pos=[25.5, 50], no_title_bar=False, no_close=True):
-        dpg.add_text(f"{message}", tag="alert-txt")
-        if button:
-            dpg.add_button(label="Ok", pos=[70, 69], width=45, callback=lambda: dpg.delete_item('info-st-gui'))
-
-# Anti-AFK functions
-def aa1():
-    dpg.set_value("antiafk-status", "Status: Spinning camera")
-    keyDown('left')
-    sleep(randint(1, 5))
-    keyUp('left')
-
-def aa2():
-    dpg.set_value("antiafk-status", "Status: Spinning camera")
-    keyDown('right')
-    sleep(randint(1, 5))
-    keyUp('right')
-
-def aa3():
-    dpg.set_value("antiafk-status", "Status: Moving around")
-    press('a')
-    sleep(0.5)
-    press('d')
-
-def aa4():
-    dpg.set_value("antiafk-status", "Status: Showing emote")
-    emote_choice = randint(1, 4)
-    emote = {1: "dance", 2: "dance2", 3: "dance3", 4: "wave"}.get(emote_choice, "dance")
-    press('/')
-    sleep(0.77)
-    write(f"/e {emote}")
-
-def aa5():
-    dpg.set_value("antiafk-status", "Status: Clicking")
-    clicks = randint(1, 8)
-    while clicks > 0:
-        clicks -= 1
-        leftClick()
-        sleep(0.4)
-
-def aa6():
-    dpg.set_value("antiafk-status", "Status: Jumping")
-    jumps = randint(1, 8)
-    while jumps > 0:
-        jumps -= 1
-        press('space')
-        sleep(1)
-
-def anti_afk():
-    global GV
-
-    def run_anti_afk():
-        actions = []
-
-        if dpg.get_value("antiafk-spin"):
-            actions.extend([aa1, aa2])
-        if dpg.get_value("antiafk-move"):
-            actions.append(aa3)
-        if dpg.get_value("antiafk-emotes"):
-            actions.append(aa4)
-        if dpg.get_value("antiafk-click"):
-            actions.append(aa5)
-        if dpg.get_value("antiafk-jump"):
-            actions.append(aa6)
-
-        while GV["antiafk"]:
-            if actions:
-                action = choice(actions)
-                action()
-            else:
-                dpg.set_value("antiafk-status", "Status: No actions!")
-                sleep(1)
-
-    if GV["antiafk"]:
-        GV["antiafk"] = False
-        dpg.set_value("antiafk-status", "Status: Anti-AFK Stopped")
-    elif not GV["antiafk"]:
-        GV["antiafk"] = True
-        dpg.set_value("antiafk-status", "Status: Starting in 3 Seconds")
-        sleep(3)
-        dpg.set_value("antiafk-status", "Status: Anti-AFK Started")
-        Thread(target=run_anti_afk).start()
-
-# Proximity Prompt
-def proximity_prompt_spam():
-    global GV
-
-    def run_pp_spam():
-        letter = dpg.get_value("pp-letter")
-        pp_duration = dpg.get_value("pp-duration")
-        sleep_interval = dpg.get_value("sleep-interval")
-
-        while GV["ppsmap"]:
-            dpg.set_value("pp-status", "Status: Holding PP")
-            keyDown(letter)
-            sleep(pp_duration)
-            keyUp(letter)
-            sleep(sleep_interval)
-
-    if GV["ppsmap"]:
-        GV["ppsmap"] = False
-        dpg.set_value("pp-status", "Status: PP Spam Stopped")
-    elif not GV["ppsmap"]:
-        GV["ppsmap"] = True
-        dpg.set_value("pp-status", "Status: Starting in 3 Seconds")
-        sleep(3)
-        dpg.set_value("pp-status", "Status: PP Spam Started")
-        Thread(target=run_pp_spam).start()
-
-# Auto Clicker
-def auto_clicker():
-    global GV
-
-    def run_auto_clicker():
-        click_interval = dpg.get_value("auto-click-interval")
-        repeat_count = dpg.get_value("auto-click-repeat")
-        repeat_until_stopped = dpg.get_value("auto-click-repeat-until-stopped")
-
-        if repeat_until_stopped:
-            while GV["autoclicker"]:
-                leftClick()
-                sleep(click_interval)
-        else:
-            for _ in range(repeat_count):
-                if not GV["autoclicker"]:
-                    break
-                leftClick()
-                sleep(click_interval)
-
-    if GV["autoclicker"]:
-        GV["autoclicker"] = False
-        dpg.set_value("auto-clicker-status", "Status: Clicker Stopped")
-    elif not GV["autoclicker"]:
-        GV["autoclicker"] = True
-        dpg.set_value("auto-clicker-status", "Status: Starting in 3 Seconds")
-        sleep(3)
-        dpg.set_value("auto-clicker-status", "Status: Clicker Started")
-        Thread(target=run_auto_clicker).start()
-
-def apply_settings():
-    always_on_top = dpg.get_value("always-on-top")
-    dpg.set_viewport_always_top(always_on_top)
-
-def save_config():
-    config = {
-        "antiafk-spin": dpg.get_value("antiafk-spin"),
-        "antiafk-move": dpg.get_value("antiafk-move"),
-        "antiafk-emotes": dpg.get_value("antiafk-emotes"),
-        "antiafk-click": dpg.get_value("antiafk-click"),
-        "antiafk-jump": dpg.get_value("antiafk-jump"),
-        "pp-letter": dpg.get_value("pp-letter"),
-        "pp-duration": dpg.get_value("pp-duration"),
-        "sleep-interval": dpg.get_value("sleep-interval"),
-        "always-on-top": dpg.get_value("always-on-top"),
-        "autoclicker-interval": dpg.get_value("auto-click-interval"),
-        "autoclicker-repeat": dpg.get_value("auto-click-repeat"),
-        "autoclicker-toggle-bind": dpg.get_value("auto-click-toggle-bind"),
-        "antiafk-toggle-bind": dpg.get_value("antiafk-toggle-bind"),
-        "pp-toggle-bind": dpg.get_value("pp-toggle-bind")
-    }
-    with open(config_file, 'w') as f:
-        json.dump(config, f, indent=4)
-    alert("Saved config", True)
-
-def load_config():
-    if not create_default_config():
+def release_keys() -> None:
+    """Ensure any potentially stuck keys are released."""
+    for key in ["w", "a", "s", "d", "space", "e", "r", "f", "x", "q", "c", "v", "z", "1", "2", "3", "4", "5"]:
         try:
-            with open(config_file, 'r') as f:
-                config = json.load(f)
-                dpg.set_value("antiafk-spin", config.get("antiafk-spin", False))
-                dpg.set_value("antiafk-move", config.get("antiafk-move", False))
-                dpg.set_value("antiafk-emotes", config.get("antiafk-emotes", False))
-                dpg.set_value("antiafk-click", config.get("antiafk-click", False))
-                dpg.set_value("antiafk-jump", config.get("antiafk-jump", False))
-                dpg.set_value("pp-letter", config.get("pp-letter", "E"))
-                dpg.set_value("pp-duration", config.get("pp-duration", 1.0))
-                dpg.set_value("sleep-interval", config.get("sleep-interval", 1.0))
-                dpg.set_value("always-on-top", config.get("always-on-top", False))
-                dpg.set_value("auto-click-interval", config.get("autoclicker-interval", 0.1))
-                dpg.set_value("auto-click-repeat", config.get("autoclicker-repeat", 10))
-                dpg.set_value("auto-click-toggle-bind", config.get("autoclicker-toggle-bind", "insert"))
-                dpg.set_value("antiafk-toggle-bind", config.get("antiafk-toggle-bind", "home"))
-                dpg.set_value("pp-toggle-bind", config.get("pp-toggle-bind", "end"))
-                apply_settings()
-                alert("Loaded config", True)
-        except FileNotFoundError:
-            create_default_config()
-    else:
-        alert("Created new config", True)
-
-def create_default_config():
-    try:
-        with open(config_file, 'x') as f:
-            json.dump(default_config, f, indent=4)
-        return True
-    except FileExistsError:
-        return False
-
-def check_keybinds():
-    from pynput import keyboard
-
-    def on_press(key):
-        try:
-            if key.char == dpg.get_value("antiafk-toggle-bind"):
-                anti_afk()
-            elif key.char == dpg.get_value("pp-toggle-bind"):
-                proximity_prompt_spam()
-            elif key.char == dpg.get_value("auto-click-toggle-bind"):
-                auto_clicker()
-        except AttributeError:
+            pyautogui.keyUp(key)
+        except Exception:
             pass
 
-    listener = keyboard.Listener(on_press=on_press)
-    listener.start()
 
-def main():
-    dpg.create_context()
-    dpg.create_viewport(title=project_name, width=413, height=300, resizable=False)
+def load_farm_config(config_path: Path = CONFIG_PATH) -> Dict[str, Any]:
+    """Load farming configuration from a YAML file, falling back to defaults if missing or invalid."""
+    if not config_path.exists():
+        return DEFAULT_FARM_CONFIG
 
-    with dpg.window(label=f"{project_name} /// main window", width=397, height=261, no_close=True, no_collapse=True, no_resize=True, no_move=True, no_scrollbar=True):
-        with dpg.menu_bar():
-            with dpg.menu(label="Anti-AFK"):
-                dpg.add_input_text(label="Toggle bind", tag="antiafk-toggle-bind", width=55, default_value="home")
-                dpg.add_checkbox(label="Spin camera", tag="antiafk-spin")
-                dpg.add_checkbox(label="Move around", tag="antiafk-move")
-                dpg.add_checkbox(label="Chat emotes", tag="antiafk-emotes")
-                dpg.add_checkbox(label="Clicking", tag="antiafk-click")
-                dpg.add_checkbox(label="Jumping", tag="antiafk-jump")
-            with dpg.menu(label="Proximity prompt"):
-                dpg.add_input_text(label="Toggle bind", tag="pp-toggle-bind", width=55, default_value="end")
-                dpg.add_input_text(label="Letter", tag="pp-letter", width=20, default_value="E")
-            with dpg.menu(label='Auto Clicker'):
-                dpg.add_input_text(label="Toggle bind", tag="auto-click-toggle-bind", width=55, default_value="insert")
-            with dpg.menu(label="Settings"):
-                dpg.add_checkbox(label="Always on top", tag="always-on-top")
-                dpg.add_button(label="Apply settings", width=120, callback=apply_settings)
-                dpg.add_button(label="Save config", width=120, callback=save_config)
-    
-        with dpg.child_window(width=198.5, height=91.5, pos=[0, 38], border=True, no_scrollbar=True, menubar=True):
-            with dpg.menu_bar():
-                dpg.add_text("Anti-AFK")
-            dpg.add_button(label="Toggle Anti-AFK", width=183.5, height=32, callback=anti_afk)
-            dpg.add_text("Status: Anti-AFK stopped.", tag="antiafk-status")
-        
-        with dpg.child_window(width=198.5, height=131.5, pos=[0, 129.5], border=True, no_scrollbar=True, menubar=True):
-            with dpg.menu_bar():
-                dpg.add_text("Proximity prompt spam")
-            dpg.add_input_float(label="PP duration", tag="pp-duration", width=85)
-            dpg.add_input_float(label="Sleep interval", tag="sleep-interval", width=85)
-            dpg.add_button(label="Toggle PP spam", width=183.5, height=32, callback=proximity_prompt_spam)
-            dpg.add_text("Status: PP Spam stopped.", tag="pp-status")
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
 
-        with dpg.child_window(width=198.5, height=222, pos=[198.5, 38], border=True, no_scrollbar=True, menubar=True):
-            with dpg.menu_bar():
-                dpg.add_text("Auto Clicker")
-            dpg.add_input_float(label="Click interval", tag="auto-click-interval", width=85)
-            dpg.add_input_int(label="Repeat X times", tag="auto-click-repeat", width=85)
-            dpg.add_checkbox(label="Repeat until stopped", tag="auto-click-repeat-until-stopped")
-            dpg.add_button(label="Toggle Clicker", width=183.5, height=32, callback=auto_clicker)
-            dpg.add_text("Status: Clicker stopped.", tag="auto-clicker-status")
+        farm_cfg = data.get("farm", {})
+        skills_raw = farm_cfg.get("skills")
 
-    load_config()
-    check_keybinds()
+        if skills_raw is not None:
+            parsed_skills = []
+            for s in skills_raw:
+                if isinstance(s, dict) and "key" in s:
+                    parsed_skills.append(
+                        Skill(
+                            key=str(s["key"]),
+                            cooldown=float(s.get("cooldown", 0.0)),
+                            animation_delay=float(s.get("animation_delay", 0.2)),
+                        )
+                    )
+        else:
+            parsed_skills = DEFAULT_FARM_SKILLS
 
-    dpg.setup_dearpygui()
-    dpg.show_viewport()
-    dpg.start_dearpygui()
-    dpg.destroy_context()
+        return {
+            "auto_click": bool(farm_cfg.get("auto_click", DEFAULT_FARM_CONFIG["auto_click"])),
+            "auto_click_button": str(farm_cfg.get("auto_click_button", DEFAULT_FARM_CONFIG["auto_click_button"])),
+            "auto_click_interval": float(farm_cfg.get("auto_click_interval", DEFAULT_FARM_CONFIG["auto_click_interval"])),
+            "skills_delay": float(farm_cfg.get("skills_delay", DEFAULT_FARM_CONFIG["skills_delay"])),
+            "skills": parsed_skills,
+        }
+    except Exception as e:
+        print(f"Warning: Failed to load farm config from {config_path} ({e}). Using default farm config.")
+        return DEFAULT_FARM_CONFIG
+
+
+def countdown(seconds: int = 5) -> None:
+    """Countdown timer to allow switching to the target window."""
+    print(f"Switch to your target window now. You have {seconds} seconds.")
+    for i in range(seconds, 0, -1):
+        print(f"Starting in {i}...")
+        time.sleep(1)
+    print("\nScript is now running. Press CTRL+C in this terminal to stop.\n")
+
+
+def load_afk_config(config_path: Path = CONFIG_PATH) -> Dict[str, Any]:
+    """Load AFK configuration from a YAML file, falling back to defaults if missing or invalid."""
+    if not config_path.exists():
+        return {"interval_seconds": DEFAULT_AFK_INTERVAL, "sequence": DEFAULT_AFK_SEQUENCE}
+
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+
+        afk_cfg = data.get("afk", {})
+        interval = afk_cfg.get(
+            "interval_seconds",
+            afk_cfg.get("interval", DEFAULT_AFK_INTERVAL),
+        )
+        sequence = afk_cfg.get("sequence", DEFAULT_AFK_SEQUENCE)
+        return {
+            "interval_seconds": interval,
+            "sequence": sequence,
+        }
+    except Exception as e:
+        print(f"Warning: Failed to load config from {config_path} ({e}). Using default AFK config.")
+        return {"interval_seconds": DEFAULT_AFK_INTERVAL, "sequence": DEFAULT_AFK_SEQUENCE}
+
+
+def execute_afk_step(step: Dict[str, Any]) -> None:
+    """Execute a single action from the AFK sequence."""
+    action = step.get("action")
+    delay = float(step.get("delay", 0.0))
+
+    # Resolve shorthand notation if action is not explicitly specified
+    if not action:
+        if "key" in step or "press" in step:
+            action = "press"
+        elif "click" in step:
+            action = "click"
+        elif "hold" in step:
+            action = "hold"
+        elif "sleep" in step:
+            action = "sleep"
+
+    if action == "press":
+        key = step.get("key") or step.get("press")
+        if key:
+            pyautogui.press(str(key))
+    elif action == "click":
+        button = step.get("button") or step.get("click")
+        if button is True or button is None:
+            button = "left"
+        pyautogui.click(button=str(button))
+    elif action == "hold":
+        key = step.get("key") or step.get("hold")
+        duration = float(step.get("duration", 0.2))
+        if key:
+            try:
+                pyautogui.keyDown(str(key))
+                time.sleep(duration)
+            finally:
+                pyautogui.keyUp(str(key))
+    elif action == "sleep":
+        duration = float(step.get("duration") or step.get("sleep", 0.0))
+        time.sleep(duration)
+
+    if delay > 0:
+        time.sleep(delay)
+
+
+def anti_afk(sequence: List[Dict[str, Any]]) -> None:
+    """Executes the configured sequence of anti-AFK actions."""
+    for step in sequence:
+        execute_afk_step(step)
+
+
+def farming_mode(config_path: Path = CONFIG_PATH) -> None:
+    """Auto-farming mode: casts skills when off cooldown and performs auto-attack clicks."""
+    cfg = load_farm_config(config_path)
+    skills = cfg["skills"]
+    auto_click = cfg["auto_click"]
+    auto_click_button = cfg["auto_click_button"]
+    auto_click_interval = cfg["auto_click_interval"]
+    skills_delay = cfg["skills_delay"]
+
+    latest_skills: Dict[Skill, datetime] = {}
+    pending_skills: Set[Skill] = set()
+    state_lock = threading.Lock()
+    q: queue.Queue[Skill] = queue.Queue()
+
+    print("Farming script started.")
+    print(f"Loaded Farm config from '{config_path}' with {len(skills)} skills:")
+    for skill in skills:
+        print(f"  - Skill '{skill.key}': cooldown={skill.cooldown}s, animation_delay={skill.animation_delay}s")
+    if auto_click:
+        print(f"  - Auto-clicking enabled: button='{auto_click_button}', interval={auto_click_interval}s")
+    else:
+        print("  - Auto-clicking disabled.")
+    countdown(5)
+
+    # Initialize all skills so they are ready immediately at start
+    with state_lock:
+        for skill in skills:
+            latest_skills[skill] = datetime.min
+
+    def worker() -> None:
+        """Worker thread that executes skill keypresses sequentially without blocking main loop."""
+        while True:
+            skill = q.get()
+            try:
+                with state_lock:
+                    latest_skills[skill] = datetime.now()
+
+                pyautogui.press(skill.key)
+                time.sleep(skill.animation_delay + skills_delay)
+            finally:
+                with state_lock:
+                    pending_skills.discard(skill)
+                q.task_done()
+
+    worker_thread = threading.Thread(target=worker, daemon=True)
+    worker_thread.start()
+
+    while True:
+        now = datetime.now()
+        with state_lock:
+            for skill in skills:
+                latest = latest_skills.get(skill, datetime.min)
+                diff = (now - latest).total_seconds()
+
+                if diff >= skill.cooldown and skill not in pending_skills:
+                    print(f"[{now.strftime('%I:%M:%S %p')}] Skill '{skill.key}' off cooldown. Executing...")
+                    pending_skills.add(skill)
+                    q.put(skill)
+
+        if auto_click:
+            pyautogui.click(button=auto_click_button)
+        time.sleep(auto_click_interval)
+
+
+def afk_mode(config_path: Path = CONFIG_PATH) -> None:
+    """Anti-AFK mode: prevents idle disconnection by executing the configured sequence."""
+    cfg = load_afk_config(config_path)
+    interval = cfg["interval_seconds"]
+    sequence = cfg["sequence"]
+
+    print("Anti-AFK script started.")
+    print(f"Loaded AFK sequence ({len(sequence)} steps) from '{config_path}' with interval: {interval}s")
+    countdown(5)
+
+    while True:
+        anti_afk(sequence)
+        current_time = time.strftime("%I:%M:%S %p")
+        print(f"[{current_time}] Executed Anti-AFK sequence. Next check in {interval}s.")
+        time.sleep(interval)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Automation utility for Anti-AFK sequences and Auto-Farming."
+    )
+    parser.add_argument(
+        "mode",
+        type=str,
+        choices=["afk", "farm"],
+        help="Mode to run: 'afk' for anti-idle sequence, 'farm' for auto-attacking and skill rotation.",
+    )
+    parser.add_argument(
+        "--config",
+        "-c",
+        type=Path,
+        default=CONFIG_PATH,
+        help="Path to YAML configuration file (default: config.yaml).",
+    )
+    args = parser.parse_args()
+
+    try:
+        if args.mode == "afk":
+            afk_mode(config_path=args.config)
+        elif args.mode == "farm":
+            farming_mode(config_path=args.config)
+    except KeyboardInterrupt:
+        print("\nScript stopped by user. Goodbye!")
+    except Exception as e:
+        print(f"\nAn error occurred: {e}")
+    finally:
+        release_keys()
+
 
 if __name__ == "__main__":
     main()

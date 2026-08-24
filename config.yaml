@@ -1,0 +1,43 @@
+# Game Automator Configuration
+
+afk:
+  # Interval between anti-AFK sequence executions (in seconds)
+  interval_seconds: 60
+
+  # List of actions to execute sequentially in AFK mode
+  sequence:
+    - action: press
+      key: "f"
+      delay: 0.1
+
+    - action: click
+      button: "left"
+      delay: 0.1
+
+farm:
+  # Enable or disable auto-clicking while farming
+  auto_click: true
+  # Mouse button for auto-clicking ("left", "right", or "middle")
+  auto_click_button: "left"
+  # Interval between auto-attack clicks (in seconds)
+  auto_click_interval: 0.15
+  # Small delay added after executing each skill (in seconds)
+  skills_delay: 0.1
+
+  # Skills to rotate when off cooldown
+  skills:
+    - key: "e"
+      cooldown: 12.0
+      animation_delay: 0.2
+
+    - key: "r"
+      cooldown: 3.0
+      animation_delay: 0.2
+
+    - key: "f"
+      cooldown: 15.0
+      animation_delay: 0.2
+
+    - key: "x"
+      cooldown: 60.0
+      animation_delay: 0.2
