@@ -41,6 +41,20 @@ DEFAULT_FARM_CONFIG = {
 }
 
 
+def format_duration(seconds: float) -> str:
+    """Format elapsed seconds into a readable string (e.g. 1h 23m 45s)."""
+    total_secs = int(round(seconds))
+    hours, remainder = divmod(total_secs, 3600)
+    minutes, secs = divmod(remainder, 60)
+    parts = []
+    if hours > 0:
+        parts.append(f"{hours}h")
+    if minutes > 0 or hours > 0:
+        parts.append(f"{minutes}m")
+    parts.append(f"{secs}s")
+    return " ".join(parts)
+
+
 def release_keys() -> None:
     """Ensure any potentially stuck keys are released."""
     for key in ["w", "a", "s", "d", "space", "e", "r", "f", "x", "q", "c", "v", "z", "1", "2", "3", "4", "5"]:
@@ -269,15 +283,18 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    start_time = time.time()
     try:
         if args.mode == "afk":
             afk_mode(config_path=args.config)
         elif args.mode == "farm":
             farming_mode(config_path=args.config)
     except KeyboardInterrupt:
-        print("\nScript stopped by user. Goodbye!")
+        elapsed = time.time() - start_time
+        print(f"\nScript stopped by user. Total running time: {format_duration(elapsed)}. Goodbye!")
     except Exception as e:
-        print(f"\nAn error occurred: {e}")
+        elapsed = time.time() - start_time
+        print(f"\nAn error occurred after {format_duration(elapsed)}: {e}")
     finally:
         release_keys()
 
